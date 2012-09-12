@@ -1,24 +1,23 @@
 name "util"
-description "sophi utility node"
+description "class2go utility node -- on top of UBUNTU"
 
-override_attributes({
-    "sophi-bitnami-django" => {
-            "django-app" => "util"
-            }
-})
+override_attributes \
+    "system" => {
+        "admin_user" => "ubuntu",
+        "admin_group" => "ubuntu",
+        "admin_home" => "/home/ubuntu"
+    }
 
 run_list(
 #   "recipe[chef-client]",
-    "recipe[sophi-update]",
+    "recipe[class2go-apt-update]",
     "recipe[gdata]",
-    "recipe[sophi-base]",
-    "recipe[sophi-python]",
-    "recipe[sophi-bitnami-django]",
-    "recipe[sophi-deploy]",
-    "recipe[sophi-logging]",
-    "recipe[sophi-database.py]",
-#    "recipe[sophi-collectstatic]",
-    "recipe[sophi-kelvinator]",
+    "recipe[class2go-base-ubuntu]",
+    "recipe[class2go-python]",
+    "recipe[class2go-deploy]",
+    "recipe[class2go-logging]",
+    "recipe[class2go-database-config]",
     "recipe[s3cmd]",
-    "recipe[sophi-bitnami-apache-restart]"
+    "recipe[class2go-util-kelvinator]",
+    "recipe[class2go-celery-worker]"
 )

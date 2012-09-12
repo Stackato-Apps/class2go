@@ -30,12 +30,12 @@ def list(request, course_prefix, course_suffix):
         video = Video.objects.get(pk=request.GET['vid'])
         video.url = request.GET['id']
         video.save()
-        video.create_production_instance()
+        video.create_ready_instance()
 
     section_structures = get_course_materials(common_page_data=common_page_data, get_video_content=True)
 
     form = None
-    if request.common_page_data['course_mode'] == "staging":
+    if request.common_page_data['course_mode'] == "draft":
         form = LiveDateForm()
 
     return render_to_response('videos/'+common_page_data['course_mode']+'/list.html', {'common_page_data': common_page_data, 'section_structures':section_structures, 'context':'video_list', 'form': form}, context_instance=RequestContext(request))
@@ -47,23 +47,18 @@ def view(request, course_prefix, course_suffix, slug):
     except:
         raise Http404
 
-    video = None
-    video_rec = None
-    if request.user.is_authenticated():
-        #video = Video.objects.get(course=common_page_data['production_course'], slug=slug)
-        video = Video.objects.get(course=common_page_data['course'], slug=slug)
-        #video_rec = request.user.videoactivity_set.filter(video=video)
-        video_rec = request.user.videoactivity_set.filter(video=video)
-        if video_rec:
-            video_rec = video_rec[0]
-        else:
-            #if student, needs to be an easy way to check if member of group
-            user_groups = request.user.groups.all()
-            for group in user_groups:
-                if group == common_page_data['course'].student_group:
-                    video_rec = VideoActivity(student=request.user, course=common_page_data['course'], video=video)
-                    video_rec.save()
-                    break
+    video = Video.objects.get(course=common_page_data['course'], slug=slug)            
+    video_rec = request.user.videoactivity_set.filter(video=video)
+    if video_rec:
+        video_rec = video_rec[0]
+    else:
+        #note student field to be renamed to user, VideoActivity for all users now
+        video_rec = VideoActivity(student=request.user, course=common_page_data['course'], video=video)
+        video_rec.save()
+
+    if video.mode == 'ready':
+        draft_version = video.image
+        video = draft_version
 
     return render_to_response('videos/view.html', {'common_page_data': common_page_data, 'video': video, 'video_rec':video_rec}, context_instance=RequestContext(request))
 
@@ -82,14 +77,6 @@ def edit(request, course_prefix, course_suffix, slug):
              'slug': slug,
              'form': form,
              })
-
-def GetOAuth2Url(request):
-    client_id = "287022098794.apps.googleusercontent.com"
-    redirect_uri = "http://" + request.META['HTTP_HOST'] + "/oauth2callback"
-    response_type = "code"
-    scope = "https://gdata.youtube.com"
-
-    return "https://accounts.google.com/o/oauth2/auth?client_id=" + client_id + "&redirect_uri=" + redirect_uri + "&scope=" + scope + "&response_type=" + response_type
 
 @auth_is_course_admin_view_wrapper
 def upload(request, course_prefix, course_suffix):
@@ -149,7 +136,7 @@ def manage_exercises(request, course_prefix, course_suffix, video_slug):
             exercise.save()
 
             video_time = request.POST['video_time']
-            videoToEx = VideoToExercise(video=video, exercise=exercise, video_time=video_time, is_deleted=0, mode='staging')
+            videoToEx = VideoToExercise(video=video, exercise=exercise, video_time=video_time, is_deleted=0, mode='draft')
             videoToEx.save()
             return HttpResponseRedirect(reverse('courses.videos.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], video.slug,)))
 
@@ -196,7 +183,7 @@ def add_existing_exercises(request):
     exercises = Exercise.objects.filter(id__in=exercise_ids)
     for exercise in exercises:
         video_time = 0
-        videoToEx = VideoToExercise(video=video, exercise=exercise, is_deleted=False, video_time=video_time, mode="staging")
+        videoToEx = VideoToExercise(video=video, exercise=exercise, is_deleted=False, video_time=video_time, mode="draft")
         videoToEx.save()
     return HttpResponseRedirect(reverse('courses.videos.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], video.slug,)))
 
@@ -226,33 +213,39 @@ def save_exercises(request):
 
 def delete_exercise(request):
     print "KN#KJNJWNKAJDSAJNDSNAJKD"
-    toDelete = VideoToExercise.objects.get(exercise__fileName=request.POST['exercise_file'], mode='staging', is_deleted=False)
+    toDelete = VideoToExercise.objects.get(exercise__fileName=request.POST['exercise_file'], mode='draft', is_deleted=False)
     toDelete.delete()
     toDelete.save()
     return HttpResponseRedirect(reverse('courses.videos.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], request.POST['video_slug'],)))
 
+#enforce order by sorting by video_time
 def get_video_exercises(request):
+    import json
     video = Video.objects.get(id = request.GET['video_id'])
     videoToExs = VideoToExercise.objects.select_related('exercise', 'video').filter(video=video).order_by('video_time')
-    json_list = []
+    json_list = {}
+    order = 0
     for videoToEx in videoToExs:
-        json_string = "\"" + str(videoToEx.video_time) + "\": {\"time\": " + str(videoToEx.video_time) + ", \"problemDiv\": \"" + str(videoToEx.exercise_id) + "\"}"
-        json_list.append(json_string)
+        json_list[str(videoToEx.video_time)]={}
+        json_list[str(videoToEx.video_time)]['time']=videoToEx.video_time
+        json_list[str(videoToEx.video_time)]['problemDiv']=videoToEx.exercise_id
+        json_list[str(videoToEx.video_time)]['order']=order
+        json_list[str(videoToEx.video_time)]['fileName']=videoToEx.exercise.fileName
 
-    json_string = "{" + ','.join( map( str, json_list )) + "}"
+        order=order+1
+
+    json_string = json.dumps(json_list)
     return HttpResponse(json_string)
 
+#enforce order by sorting by video_time
 @auth_view_wrapper
 def load_video_problem_set(request, course_prefix, course_suffix, video_id):
-    try:
-        common_page_data = get_common_page_data(request, course_prefix, course_suffix)
-    except:
-        raise Http404
 
-    ex_list = Exercise.objects.filter(videotoexercise__video_id=video_id)
+    vex_list = VideoToExercise.objects.select_related('exercise', 'video').filter(video_id=video_id).order_by('video_time')
+
     file_names = []
-    for ex in ex_list:
+    for vex in vex_list:
         #Remove the .html from the end of the file name
-        file_names.append(ex.fileName[:-5])
+        file_names.append(vex.exercise.fileName[:-5])
     # assessment type is hard-coded because all in-video exercises are formative
     return render_to_response('problemsets/load_problem_set.html',{'file_names': file_names, 'assessment_type': 'formative'},context_instance=RequestContext(request))

@@ -6,7 +6,9 @@ from datetime import datetime
 from models import Course
 from courses.actions import is_member_of_course
 from courses.actions import auth_view_wrapper
-
+from django.contrib import messages
+from courses.common_page_data import get_common_page_data
+from c2g.models import Course
 ### C2G Core Views ###
 
 @auth_view_wrapper
@@ -18,7 +20,7 @@ def home(request):
     
     
     now = datetime.now()
-    courses = Course.objects.filter(calendar_start__gt=now, mode="production")
+    courses = Course.objects.filter(calendar_start__gt=now, mode="ready")
     available_course_list = []
     for course in courses:
         if is_member_of_course(course, request.user):
@@ -39,3 +41,39 @@ def throw500(request):
 
 def throw404(request):
     raise Http404
+
+def hc(request):
+    return render_to_response('honor_code.html',{},RequestContext(request))
+
+def tos(request):
+    return render_to_response('TOS.html',{},RequestContext(request))
+
+def privacy(request):
+    return render_to_response('privacy.html',{},RequestContext(request))
+
+def contactus(request):
+    if request.GET.get('pre') and request.GET.get('post'):
+        try:
+            common_page_data = get_common_page_data(request, request.GET.get('pre'), request.GET.get('post'))
+            course = common_page_data['course']
+            staffmail=course.contact
+        except Course.DoesNotExist:
+            course=None
+            staffmail=''
+    else:
+        course=None
+        staffmail=''
+
+    return render_to_response('contactus.html', 
+                              {'request': request,
+                               'course': course,
+                               'staffmail' : staffmail,
+                              },context_instance=RequestContext(request))
+
+def test_messages(request):
+    messages.add_message(request,messages.INFO, 'Hello World Info')
+    messages.add_message(request,messages.SUCCESS, 'Hello World Success')
+    messages.add_message(request,messages.WARNING, 'Hello World Warning')
+    messages.add_message(request,messages.ERROR, 'Hello World Error')
+            
+    return HttpResponse("Messages Submitted, go back to regular page to view")

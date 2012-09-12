@@ -11,8 +11,13 @@ from courses.common_page_data import get_common_page_data
 from courses.videos.forms import *
 import gdata.youtube
 import gdata.youtube.service
+from gdata.media import YOUTUBE_NAMESPACE
+from atom import ExtensionElement
 import urllib2, urllib, json
 import re
+import settings
+
+import kelvinator.tasks
 
 from datetime import datetime
 from courses.actions import auth_is_course_admin_view_wrapper
@@ -32,20 +37,20 @@ def add_video(request):
 
     index = len(Video.objects.filter(topic_id=request.POST.get("topic_id")))
 
-    staging_video = Video(
-        course=common_page_data['staging_course'],
+    draft_video = Video(
+        course=common_page_data['draft_course'],
         topic_id=int(request.POST.get("topic_id")),
         title=request.POST.get("title"),
         #description=request.POST.get("description"),
         type='youtube',
         url=request.POST.get("yt_id"),
         slug=request.POST.get("slug"),
-        mode='staging',
+        mode='draft',
         index=index
     )
-    staging_video.save()
+    draft_video.save()
 
-    staging_video.create_production_instance()
+    draft_video.create_ready_instance()
 
     return redirect(request.META['HTTP_REFERER'])
 
@@ -115,8 +120,8 @@ def oauth(request):
     if 'code' in request.GET:
         code = request.GET.get('code')
 #        print code
-        client_id = "287022098794.apps.googleusercontent.com"
-        client_secret = "vqCgk8qv1XKKtiKGfR8vTq_w"
+        client_id = settings.GOOGLE_CLIENT_ID
+        client_secret = settings.GOOGLE_CLIENT_SECRET
         redirect_uri = "http://" + request.META['HTTP_HOST'] + "/oauth2callback"
 
         post_data = [('code', code), ('client_id', client_id), ('client_secret', client_secret), ('redirect_uri', redirect_uri), ('grant_type', 'authorization_code')]
@@ -124,8 +129,7 @@ def oauth(request):
         content = json.loads(result.read())
 
         yt_service = gdata.youtube.service.YouTubeService(additional_headers={'Authorization': "Bearer "+content['access_token']})
-        yt_service.developer_key = 'AI39si5GlWcy9S4eVFtajbVZk-DjFEhlM4Zt7CYzJG3f2bwIpsBSaGd8SCWts6V5lbqBHJYXAn73-8emsZg5zWt4EUlJJ4rpQA'
-
+        yt_service.developer_key = settings.YT_SERVICE_DEVELOPER_KEY 
 
         video = Video.objects.get(pk=request.GET.get('state'))
 
@@ -137,8 +141,9 @@ def oauth(request):
                     text='Education',
                     label='Education')],
             )
-
-        video_entry = gdata.youtube.YouTubeVideoEntry(media=my_media_group)
+        
+        extension = ExtensionElement('accessControl', namespace=YOUTUBE_NAMESPACE, attributes={'action': 'list', 'permission': 'denied'})
+        video_entry = gdata.youtube.YouTubeVideoEntry(media=my_media_group, extension_elements=[extension])
 
         entry = yt_service.InsertVideoEntry(video_entry, video.file)
         #print entry.id.ToString()
@@ -158,7 +163,7 @@ def oauth(request):
     #return redirect("http://" + request.META['HTTP_HOST'] + "/nlp/Fall2012/videos")
 
 def GetOAuth2Url(request, video):
-    client_id = "287022098794.apps.googleusercontent.com"
+    client_id = settings.GOOGLE_CLIENT_ID
     redirect_uri = "http://" + request.META['HTTP_HOST'] + "/oauth2callback"
     response_type = "code"
     scope = "https://gdata.youtube.com"
@@ -181,7 +186,7 @@ def upload(request):
         form = S3UploadForm(request.POST, request.FILES, course=common_page_data['course'], instance=new_video)
         if form.is_valid():
             new_video.index = new_video.section.getNextIndex()
-            new_video.mode = 'staging'
+            new_video.mode = 'draft'
             new_video.handle = course_prefix + "--" + course_suffix
 
             # Bit of jiggery pokery to so that the id is set when the upload_path function is called.
@@ -192,8 +197,13 @@ def upload(request):
             new_video.file = form.cleaned_data['file']
 
             new_video.save()
-            new_video.create_production_instance()
+            new_video.create_ready_instance()
             print new_video.file.url
+
+            # TODO: don't hardcode the AWS location 
+            s3_path="https://s3-us-west-2.amazonaws.com/"+common_page_data['aws_storage_bucket_name']+"/"+urllib.quote_plus(new_video.file.name,"/")
+            # TODO: make these parameters settable
+            kelvinator.tasks.run.delay(s3_path, "1", "1000")
 
             if new_video.url:
                 return redirect('courses.videos.views.list', course_prefix, course_suffix)

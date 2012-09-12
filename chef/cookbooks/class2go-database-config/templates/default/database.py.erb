@@ -1,0 +1,40 @@
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql', 
+        'NAME': '<%= @node[:aws][:database_instance] %>',
+        'USER': '<%= @node[:aws][:database_user] %>',
+        'PASSWORD': '<%= @node[:aws][:database_password] %>',
+        'HOST': '<%= @node[:aws][:database_host] %>',
+        'PORT': '',
+    }
+}
+
+# When PRODUCTION=True we don't show stackdumps on errors.  Careful, no quotes.
+PRODUCTION = <%= @node[:main][:production] %>
+
+INSTANCE = '<%= @node[:main][:instance] %>'
+
+# Put your name and email address here, so Django serious errors can come to you
+ADMINS = (
+        ('<%= @node[:main][:admin_name] %>', '<%= @node[:main][:admin_email] %>'),
+        )
+
+SECRET_KEY = '<%= @node[:main][:django_secret] %>'
+
+AWS_ACCESS_KEY_ID = '<%= @node[:aws][:access_key] %>'
+AWS_SECRET_ACCESS_KEY = '<%= @node[:aws][:access_secret] %>'
+AWS_STORAGE_BUCKET_NAME = '<%= @node[:aws][:storage_bucket] %>'
+
+MEDIA_ROOT = ''
+
+PIAZZA_ENDPOINT = '<%= @node[:piazza][:endpoint] %>'
+PIAZZA_KEY = '<%= @node[:piazza][:key] %>'
+PIAZZA_SECRET = '<%= @node[:piazza][:secret] %>'
+
+SES_SMTP_USER = '<%= @node[:aws][:smtp_user] %>'
+SES_SMTP_PASSWD = '<%= @node[:aws][:smtp_password] %>'
+
+YT_SERVICE_DEVELOPER_KEY = '<%= @node[:google][:yt_service_developer_key] %>'
+GOOGLE_CLIENT_ID = '<%= @node[:google][:google_client_id] %>' 
+GOOGLE_CLIENT_SECRET = '<%= @node[:google][:google_client_secret] %>'
+

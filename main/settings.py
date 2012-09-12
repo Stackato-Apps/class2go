@@ -1,6 +1,7 @@
-# Django settings for class2go project.
+# Django settings for Class2Go project.
 
 from database import *
+from os import path
 from os import path
 #ADDED FOR url tag future
 import django.template
@@ -10,9 +11,23 @@ django.template.add_to_builtins('django.templatetags.future')
 import djcelery
 djcelery.setup_loader()
 
-
+# the INSTANCE should be "prod" or "stage" or something like that
+# if it hasn't been set then get the user name
+# since we use this for things like queue names, we want to keep this unique
+# to keep things from getting cross wired
+try:
+    INSTANCE
+except NameError:
+    try:
+        from os import getuid
+        from pwd import getpwuid
+        INSTANCE=getpwuid(getuid())[0]
+    except:
+        INSTANCE="unknown"
 
 # If PRODUCTION flag not set in Database.py, then set it now.
+#PRODUCTION = True
+
 try:
     PRODUCTION
 except NameError:
@@ -22,7 +37,6 @@ if PRODUCTION == True:
     DEBUG = False
 else:
     DEBUG = True
-
 
 TEMPLATE_DEBUG = DEBUG
 
@@ -76,7 +90,7 @@ MEDIA_URL = ''
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
 # Example: "/home/media/media.lawrence.com/static/"
-STATIC_ROOT = '/opt/sophi/static/'
+STATIC_ROOT = '/opt/class2go/static/'
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
@@ -117,8 +131,10 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.http.ConditionalGetMiddleware',
     'convenience_redirect.redirector.convenience_redirector',
     'courses.common_page_data_middleware.common_data',
+    'courses.user_profiling_middleware.user_profiling',
 )
 
 ROOT_URLCONF = 'urls'
@@ -173,14 +189,18 @@ INSTALLED_APPS = (
                       'problemsets',
                       'django.contrib.flatpages',
                       'storages',
-                      #'celerytest',
-                      #'djcelery_email',
+                      'celerytest',
+                      'djcelery_email',
                       'kelvinator',
+                      'db_scripts'
                       )
-if class2go_mode != "prod":
+if INSTANCE != "prod":
     INSTALLED_APPS += (
                         'db_test_data',
                        )
+
+
+MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 
 # Storage
 
@@ -274,6 +294,10 @@ LOGGING = {
     }
 }
 
+USE_ETAGS = True
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Session Settings
 SESSION_COOKIE_AGE = 3*30*24*3600
 
@@ -281,7 +305,7 @@ SESSION_COOKIE_AGE = 3*30*24*3600
 EMAIL_ALWAYS_ACTUALLY_SEND = False
 
 # Email Settings
-SERVER_EMAIL = 'sophi-dev@cs.stanford.edu'
+SERVER_EMAIL = 'c2g-dev@cs.stanford.edu'
 
 # For Production, or if override is set, actually send email
 if PRODUCTION or EMAIL_ALWAYS_ACTUALLY_SEND:
@@ -308,5 +332,8 @@ CELERY_EMAIL_TASK_CONFIG = {
 BROKER_TRANSPORT='sqs'
 BROKER_USER = AWS_ACCESS_KEY_ID
 BROKER_PASSWORD = AWS_SECRET_ACCESS_KEY
-BROKER_TRANSPORT_OPTIONS = {'region': 'us-west-1', 'queue_name_prefix' : 'celery-'}
+BROKER_TRANSPORT_OPTIONS = {
+    'region': 'us-west-2', 
+    'queue_name_prefix' : INSTANCE+'-',
+}
 

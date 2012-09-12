@@ -2,16 +2,20 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ STATIC_URL }}css/core/bootstrap.css" />
+    {% block top_scripts %}
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.0.4/css/bootstrap-combined.min.css" />
     <link rel="stylesheet" href="{{ STATIC_URL }}css/core/responsive.css" />
-    <link rel="stylesheet" href="{{ STATIC_URL }}css/core/ui-lightness/jquery-ui-1.8.22.custom.css" />
+    <link rel="stylesheet" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.8.22/themes/ui-lightness/jquery-ui.css" />
     <link rel="stylesheet" href="{{ STATIC_URL }}css/core/body.css" />
     <link rel="stylesheet" href="{{ STATIC_URL }}css/core/divs.css" />
     <!--[if IE 7]>
-      <link rel="stylesheet" href="{{ STATIC_URL }}css/core/font-awesome-ie7.css">
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/2.0/css/font-awesome-ie7.css">
     <![endif]-->
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.8.22/jquery-ui.min.js"></script>
+    {% endblock top_scripts %}
     {% block addl_stylesheets %}{% endblock addl_stylesheets %}
-    <title>{% block title %}Class2Go{% endblock %}</title>
+    <title>{% block title %}Stanford Online{% endblock %}</title>
 </head>
 
 <body>
@@ -52,8 +56,8 @@
                             <p>You are currently viewing:</p>
                             
                             <div class="btn-group btn-views-toggle">
-                                <button type="submit" name="to_mode" value="staging" class="btn btn-mini{% ifequal common_page_data.course_mode 'staging' %} active{% endifequal %}">Edit</button>
-                                <button type="submit" name="to_mode" value="production" class="btn btn-mini{% ifequal common_page_data.course_mode 'production' %} active{% endifequal %}">Live</button>
+                                <button type="submit" name="to_mode" value="draft" class="btn btn-mini{% ifequal common_page_data.course_mode 'draft' %} active{% endifequal %}">Edit</button>
+                                <button type="submit" name="to_mode" value="ready" class="btn btn-mini{% ifequal common_page_data.course_mode 'ready' %} active{% endifequal %}">Live</button>
                             </div>
                             <input type="hidden" name="course_prefix" value="{{common_page_data.course_prefix}}"/>
                             <input type="hidden" name="course_suffix" value="{{common_page_data.course_suffix}}"/>
@@ -68,14 +72,14 @@
             <div class="top-nav">
             {% if user.is_authenticated %}
                 <li>
-                    <form action="{% url 'auth_logout' %}" method="POST">
+                    <form action="{% url 'auth_logout' %}?next=/{{common_page_data.course_prefix}}/{{common_page_data.course_suffix}}" method="POST">
                         <input type="submit" id="login_button" class="btn logout hidden-phone" value="Logout" />
                         {% csrf_token %}
                     </form>
                 </li>
                 <li class="hidden-phone"><span>Welcome <b><a href="/accounts/profile">{{ user.first_name }} {{ user.last_name }}</a></b>!</span></li>
             {% else %}
-                <li class="hidden-phone"><a id="login_button" class="btn" data-toggle="modal" href="#login-modal">Login</a></li>
+                <li class="hidden-phone"><a id="login_button" class="btn" href="{% url 'auth_login' %}?next={{ request.get_full_path }}">Login</a></li>
                 <li class="hidden-phone"><a href="{% url 'registration_register' %}?pre={{common_page_data.course_prefix}}&post={{common_page_data.course_suffix}}" class="btn">Register</a></li>
             {% endif %}
                 <li class="visible-phone"><a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse"><i class="icon-reorder"></i></a></li>
@@ -111,7 +115,8 @@
         </div>
     </div>
     {% include "footer.html" %}
-
+    {% if reenable_modal %}
+    <!-- Commenting out the modal login per #447 for now
     <div id="login-modal" class="modal fade">
         <div class="modal-header">
             <a class="close" data-dismiss="modal">x</a>
@@ -120,7 +125,7 @@
         <form action="{% url 'auth_login' %}" method="POST" class="form-horizontal">
         <div class="modal-body">
             <div class="alert alert-info">
-                <i class="icon-info-sign"></i>New to Class2Go? <strong><a href="{% url 'registration_register' %}?pre={{common_page_data.course_prefix}}&post={{common_page_data.course_suffix}}">Register here</a></strong>.
+                <i class="icon-info-sign"></i>New to Stanford Online? <strong><a href="{% url 'registration_register' %}?pre={{common_page_data.course_prefix}}&post={{common_page_data.course_suffix}}">Register here</a></strong>.
             </div>
             <fieldset>
                 <div class="control-group">
@@ -145,13 +150,15 @@
         </div>
         </form>
     </div>
-    
-    <script type="text/javascript" src="{{ STATIC_URL }}js/core/jquery-1.7.2.min.js"></script>
-    <script type="text/javascript" src="{{ STATIC_URL }}js/core/jquery-ui-1.8.22.custom.min.js"></script>
+    -->
+    {% endif %}
+
+    {% block bottom_scripts %}
     <script type="text/javascript" src="{{ STATIC_URL }}js/core/jquery-ui-timepicker-addon.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/core/bootstrap.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/core/css3-mediaqueries.js"></script>
     <script type="text/javascript" src="{{ STATIC_URL }}js/core/app.js"></script>
+    {% endblock bottom_scripts %}
     <script type="text/javascript">
       var _gaq = _gaq || [];
       _gaq.push(['_setAccount', 'UA-33859275-1']);

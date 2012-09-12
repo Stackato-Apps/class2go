@@ -23,11 +23,9 @@
 <div id="c2g_layout_m_column" class="khan-template">
   {% if user.is_authenticated %}
 
-    {% if video.title == 'Defining Minimum Edit Distance'%}
-        <iframe width="900" height="700" src="{{STATIC_URL}}latestKhan/demo/nlp_with_khan_multi2.html" frameborder="0" scrolling="no" allowfullscreen></iframe>
-    {% elif video.title %} 
+    {% if video.title %} 
         <h2 class="section-headline">{{video.title}}</h2>
-        {% if common_page_data.course_mode == 'staging' and common_page_data.is_course_admin %}
+        {% if common_page_data.course_mode == 'draft' and common_page_data.is_course_admin %}
           <a href="{% url 'courses.videos.views.edit' common_page_data.course_prefix common_page_data.course_suffix video.slug %}" class="btn edit-video">Edit Video</a>
         {% endif %}
             <!-- Hardcoding select content of khan-site.html -->
@@ -96,6 +94,13 @@
 
 
 {% if video.title %} 
+<script>
+var c2gConfig = {
+    user: {{user.id}},
+    problemType: 'formative',
+    progressUrl: '/{{common_page_data.course_prefix}}/{{common_page_data.course_suffix}}/videos'
+};
+</script>
 <script src="{{ STATIC_URL }}latestKhan/khan-exercise-c2g.js" /></script>
 <script src="{{ STATIC_URL }}js/thumbnails.js" /></script>
 <script>
@@ -110,8 +115,7 @@
 
     // [@wescott] Want to get valid thumbnails for other videos, since they might not have been
     // Kelvinated
-    var path = '/static/graphics/videos/nlp/' + encodeURIComponent("{{ video.title }}") + '/jpegs/';
-    //var path = 'http://dev/{{course.prefix}}/{{course.suffix}}/videos/{{ video.id}}/thumbnails/';
+    var path='http://{{common_page_data.aws_storage_bucket_name}}.s3-website-us-west-2.amazonaws.com/{{common_page_data.course_prefix}}/{{common_page_data.course_suffix}}/videos/{{video.id}}/jpegs/';
     var thumbManifest = {};
     var psManifest = {};
     var loadThumbManifest = function (data, textStatus, jqXHR) { 
@@ -136,9 +140,12 @@
     };
     $.getJSON(path + "manifest.txt", "", loadThumbManifest);
     $.getJSON("/get_video_exercises?video_id={{video.id}}", "", loadPSManifest);
-    var thumbSet = initThumbnails('{{ video.url }}', thumbManifest, psManifest);
+
+    var playerVars = { 'rel': 0, 'start': {% if video_rec %}{{video_rec.start_seconds}}{% else %}0{% endif %} };
+    var thumbSet = initThumbnails('{{ video.url }}', thumbManifest, psManifest, playerVars);
 
     var initStacks = function () {
+        /*
         console.log("initStacks being run now");
         if (typeof KhanC2G != "undefined" && $.isArray(KhanC2G.remoteExercises)) {
             for (var i = 0; i < KhanC2G.remoteExercises.length; i += 1) {
@@ -146,9 +153,9 @@
                 console.log("Made problem " + i);
             }
         }
+        */
         $('.current-card-contents').append($('div.content'));
         $('.current-card-contents').css('min-height', '600px');
-        //$('#problem-and-answer').css('min-height', '600px');
         $('div.content').css('position', 'absolute').css('top', '10px').css('left','10px');
 
         $('#container').css('padding-top',0);
@@ -169,7 +176,6 @@
 
             $('#questionBG').remove();
             $('#questionPane').remove();
-            //$('#hintsarea').hide();
             $('#problemarea').css('z-index', 0);
 
             $('#playerdiv').fadeTo('slow', 1.0);
@@ -183,8 +189,15 @@
 
     };
     $(document).ready(function () {
-        window.setTimeout(initStacks, 2000);
+        window.setTimeout(KhanC2G.initVideoExercises, 2000);
     });
+    {% if video_rec %}
+    window.onbeforeunload = function() {
+        vidTime = Math.floor(player.getCurrentTime());
+        duration = player.getDuration();
+        $.ajax({type:"POST", url: "/videos/save/", async:false, data: {videoRec: {{video_rec.id}}, playTime: vidTime, duration: duration, csrfmiddlewaretoken: '{{ csrf_token }}'}});
+    }
+    {% endif %}
 </script>
 
 {% else %}

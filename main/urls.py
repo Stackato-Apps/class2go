@@ -7,11 +7,7 @@ admin.autodiscover()
 
 urlpatterns = patterns('',
 
-    # Home page redirects to our one course page for now.  We will want to remove
-    # this before we go to production of course.
-    url(r'^$', redirect_to, {'url': '/nlp/Fall2012/'}),
-    url(r'^nlp$', redirect_to, {'url': '/nlp/Fall2012/'}),
-
+   
     # Health check endpoint.  Used by AWS load balancer.  Want something stable that
     # won't be redirected or change
     url(r'_health$', 'c2g.views.healthcheck'),
@@ -19,6 +15,14 @@ urlpatterns = patterns('',
     # Testing the error pages (404 and 500)
     url(r'^_throw500$', 'c2g.views.throw500'),
     url(r'^_throw404$', 'c2g.views.throw404'),
+
+    #Testing messages
+    url(r'^_test_messages$', 'c2g.views.test_messages'),
+
+    url(r'^honor_code$', 'c2g.views.hc'),
+    url(r'^terms_of_service$', 'c2g.views.tos'),
+    url(r'^privacy$', 'c2g.views.privacy'),
+    url(r'^contactus$', 'c2g.views.contactus'),
 
                        
     # Commented out the following 2 urls since point to a signup page which is
@@ -45,8 +49,9 @@ urlpatterns = patterns('',
     url(r'^admin/doc/', include('django.contrib.admindocs.urls')),
 
     # Uncomment the next line to enable the admin:
-    url(r'^admin/', include(admin.site.urls)),
+    url(r'^admin/?', include(admin.site.urls)),
 
+    url(r'^extract$', 'kelvinator.views.extract'),
 
     # The following line is temprarily commented out until we figure out how django cascades its URL matching operations.
     # After this is figured out, the rest of the matches below shall be moved to courses.url.
@@ -129,7 +134,7 @@ urlpatterns = patterns('',
     url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/problemsets/(?P<pset_slug>[a-zA-Z0-9_-]+)?$', 'problemsets.views.show'),
     url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/createproblemset/?$', 'problemsets.views.create_form'),
     url(r'^createproblemsetaction/?', 'problemsets.views.create_action'),
-    url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/problemsets/(?P<pset_slug>[a-zA-Z0-9_-]+)/edit?$', 'problemsets.views.edit_form'),
+    url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/problemsets/(?P<pset_slug>[a-zA-Z0-9_-]+)/edit/?$', 'problemsets.views.edit_form'),
     url(r'^editproblemsetaction/?', 'problemsets.views.edit_action'),
     url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/problemsets/(?P<pset_slug>[a-zA-Z0-9_-]+)/manage_exercises?$', 'problemsets.views.manage_exercises'),
     url(r'^add_existing_problemset_exercises/?$', 'problemsets.views.add_existing_exercises'),
@@ -145,6 +150,8 @@ urlpatterns = patterns('',
     url(r'^upload_file/?', 'courses.files.actions.upload'),
     url(r'^delete_file/?', 'courses.files.actions.delete_file'),
 
+    # Landing Page
+    url(r'^/?$', 'courses.landing.views.landing'),
 
     #Preview
     url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/preview/$', 'courses.preview.views.preview'),
@@ -153,5 +160,7 @@ urlpatterns = patterns('',
     
     #Email
     url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/(?P<course_suffix>[a-zA-Z0-9_-]+)/email_members/$', 'courses.email_members.views.email_members'),             
-                       
+    
+    #Current course redirects THIS SHOULD PROBABLY ALWAYS BE THE LAST ITEM THAT HAS TO DO WITH COURSES
+    url(r'^(?P<course_prefix>[a-zA-Z0-9_-]+)/?$', 'courses.views.current_redirects'),
 )

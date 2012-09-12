@@ -2,23 +2,52 @@
 {% load url from future %}
 {% block topnav %} {% endblock topnav %}
 {% block navbar %} {% endblock navbar %}
+
+{% block top_scripts %}
+<link rel="stylesheet" href="//netdna.bootstrapcdn.com/twitter-bootstrap/2.0.4/css/bootstrap-combined.min.css" />
+<link rel="stylesheet" href="{{ STATIC_URL }}css/core/responsive.css" />
+<link rel="stylesheet" href="{{ STATIC_URL }}css/core/body.css" />
+<link rel="stylesheet" href="{{ STATIC_URL }}css/core/divs.css" />
+<!--[if IE 7]>
+ <link rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/2.0/css/font-awesome-ie7.css">
+ <![endif]-->
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+{% endblock top_scripts %}
+
+
+{% block bottom_scripts %}
+<script type="text/javascript" src="{{ STATIC_URL }}js/core/bootstrap.js"></script>
+<script type="text/javascript" src="{{ STATIC_URL }}js/core/app.js"></script>
+{% endblock bottom_scripts %}
+
+
 {% block r_column_content %}
-<div class = "span7">
-<h1>Course Info</h1>
-Natural language processing is the technology for dealing with our most ubiquitous product: human language, as it appears in emails, web pages, tweets, product descriptions, newspaper stories, social media, and scientific articles, in thousands of languages and varieties. In the past decade, successful natural language processing applications have become part of our everyday experience, from spelling and grammar correction in word processors to machine translation on the web, from email spam detection to automatic question answering, from detecting people's opinions about products or services to extracting appointments from your email. In this class, you'll learn the fundamental algorithms and mathematical models for human alanguage processing and how you can use them to solve practical problems in dealing with language data wherever you encounter it.    
-</div>
+<div class="row-fluid">
+{% block course_description %}
+
+{% endblock course_description %}
 {% if user.is_authenticated %}
   {% if common_page_data.is_course_member %}
   <div class="span5">
     <div class="alert alert-success"><i class="icon-heart"></i>You have signed up for {{common_page_data.course.title}}!</div>
-    The course starts on {{common_page_data.course.calendar_start}}.  The course staff will contact you with an email introduction when the date approaches.  Hope to see you online this term!
+    <p>The course starts on {{common_page_data.course.calendar_start}}.  The course staff will contact you with an email introduction when the date approaches.  Hope to see you online this term!</p>
+      
+    <p><a href="{% url 'auth_logout' %}?next={% url 'courses.preview.views.preview' common_page_data.course_prefix common_page_data.course_suffix%}">Register or log-in someone else</a></p>
   </div>
   {% else %}
-    <div class="span5 alert alert-info"><i class="icon-info-sign"></i>Hi {{user.first_name}} {{user.last_name}}.  It looks we already have record of you at Stanford Online.  Would you like to register for {{common_page_data.course.title}}?
+    <div class="span5">
+    <div class="alert alert-info"><i class="icon-info-sign"></i>Hi {{user.first_name}} {{user.last_name}}.  It looks we already have record of you at Stanford Online.  Would you like to register for {{common_page_data.course.title}}?
     <form style="display:inline" action="{% url 'courses.actions.signup_with_course' common_page_data.course_prefix common_page_data.course_suffix %}?redirect_to={{request.path}}" method="POST">
-    <input type="submit" id="login_button" class="btn" value="Enroll" /></div>
+    <input type="submit" id="login_button" class="btn" value="Enroll" />
     {% csrf_token %}
+    </form>
+    </div>
+    <a href="{% url 'auth_logout' %}?next={% url 'courses.preview.views.preview' common_page_data.course_prefix common_page_data.course_suffix%}">Register or log-in someone else</a>
+    </div>
+    
   {% endif %}
+
+    
 {% else %}
 {% if display_login %}
    <div class="span5">
@@ -46,7 +75,8 @@ Natural language processing is the technology for dealing with our most ubiquito
            <input type="submit" value="Login" class="btn" />
            <input type="hidden" name="next" value="{{ next }}" />
        </form>
-           <a href="{% url 'auth_password_reset' %}">Forgot My Password</a>
+           <a href="{% url 'auth_password_reset' %}">Forgot My Password</a> &nbsp; &nbsp;
+           <a href="{% url 'courses.preview.views.preview' common_page_data.course_prefix common_page_data.course_suffix%}">Registration</a>
        </div>
        
    </div>
@@ -63,20 +93,25 @@ Natural language processing is the technology for dealing with our most ubiquito
           {% endif %}
       {% endfor %}
       <div class="registration">
-          <div class="well">
-                <h2 class="span12 pagination-centered"> Signup </h2>
+          <div class="well span12">
+                <h2 class=" pagination-centered"> Signup </h2>
                 <form action="{% url 'courses.preview.views.preview_reg' common_page_data.course_prefix common_page_data.course_suffix %}" method="post">
-                     {% csrf_token %}
-                     <table>
-                        {{ form.as_table }}
-                     </table>
-                     <div class="form-actions">
-                    <input type="submit" value="Register" class="btn btn-primary btn-large" />
+                    {% include "registration/regforminputs.html" %}  
+                    <div class="form-actions">
+                        <p>
+                        {{form.tos.errors}} {{form.tos}} I agree to Stanford Online's <a href="{% url 'c2g.views.tos' %}" target="_blank">Terms of Service</a>, 
+                        <a href="{% url 'c2g.views.tos' %}#honor" target="_blank" >Honor Code</a>, and <a href="{% url 'c2g.views.tos' %}#privacy" target="_blank">Privacy Policy</a>
+                        
+                        </p>
+                        <input type="submit" value="Register" class="btn btn-primary btn-large" /> &nbsp; Already have an account?  <a href="{% url 'courses.preview.views.preview' common_page_data.course_prefix common_page_data.course_suffix %}?login"> Login instead</a>
+                        
                     </div>
+
                 </form>
           </div>
        </div>
     </div>
     {% endif %}
 {% endif %}
+</div>
 {% endblock r_column_content %}

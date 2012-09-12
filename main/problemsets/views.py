@@ -12,6 +12,7 @@ from django.db.models import Q
 from courses.actions import auth_view_wrapper, auth_is_course_admin_view_wrapper
 from django.views.decorators.http import require_POST
 from courses.forms import *
+from django.contrib import messages
 
 # Filters all ProblemActivities by problem set and student. For each problem set, finds out how
 # many questions there are and how many were completed to calculate progress on
@@ -29,7 +30,7 @@ def list(request, course_prefix, course_suffix):
     section_structures = get_course_materials(common_page_data=common_page_data, get_video_content=False, get_pset_content=True)
 
     form = None
-    if request.common_page_data['course_mode'] == "staging":
+    if request.common_page_data['course_mode'] == "draft":
         form = LiveDateForm()
 
     return render_to_response('problemsets/'+common_page_data['course_mode']+'/list.html', {'common_page_data': common_page_data, 'section_structures':section_structures, 'context':'problemset_list', 'form': form}, context_instance=RequestContext(request))
@@ -40,7 +41,13 @@ def show(request, course_prefix, course_suffix, pset_slug):
         common_page_data = get_common_page_data(request, course_prefix, course_suffix)
     except:
         raise Http404
-    ps = ProblemSet.objects.getByCourse(course=common_page_data['course']).get(slug=pset_slug)
+    try:
+        ps = ProblemSet.objects.getByCourse(course=common_page_data['course']).get(slug=pset_slug)
+    except:
+        messages.add_message(request,messages.ERROR, 'This Problemset is not visible in the student view at this time. Please note that students will not see this message.')
+        return HttpResponseRedirect(reverse('problemsets.views.list', args=(course_prefix, course_suffix)))
+
+        
     problem_activities = ProblemActivity.objects.select_related('problemset_to_exercise').filter(student=request.user, problemset_to_exercise__problemSet=ps)
     psetToExs = ProblemSetToExercise.objects.getByProblemset(ps)
     activity_list = []
@@ -69,30 +76,42 @@ def attempt(request, problemId):
     exercise_type = request.POST['exercise_type']
     if exercise_type == 'problemset':
         problemset_to_exercise = ProblemSetToExercise.objects.distinct().get(problemSet__id=request.POST['pset_id'], exercise__fileName=request.POST['exercise_filename'], is_deleted=False)
-        attempts = len(ProblemActivity.objects.filter(problemset_to_exercise=problemset_to_exercise))
+        attempts = len(ProblemActivity.objects.filter(problemset_to_exercise=problemset_to_exercise, student=request.user).exclude(attempt_content='hint'))
+        # Chokes if user_selection_val isn't provided, so set to blank
+        post_selection_val = request.POST.get('user_selection_val', '')
+        # Only increment attempts if it's not a hint request
+        if request.POST['attempt_content'] != 'hint':
+            attempts += 1
         problem_activity = ProblemActivity(student = user,
                                            problemset_to_exercise = problemset_to_exercise,
                                            complete = request.POST['complete'],
                                            attempt_content = request.POST['attempt_content'],
                                            count_hints = request.POST['count_hints'],
                                            time_taken = request.POST['time_taken'],
-                                           attempt_number = attempts + 1,
+                                           seed = request.POST['seed'],
+                                           attempt_number = attempts,
                                            problem_type = request.POST['problem_type'],
-                                           user_selection_val = request.POST['user_selection_val'],
+                                           user_selection_val = post_selection_val,
                                            user_choices = request.POST['user_choices'])
 
     elif exercise_type == 'video':
         video_to_exercise = VideoToExercise.objects.distinct().get(video__id=request.POST['video_id'], exercise__fileName=request.POST['exercise_filename'], is_deleted=False)
-        attempts = len(ProblemActivity.objects.filter(video_to_exercise=video_to_exercise))
+        attempts = len(ProblemActivity.objects.filter(video_to_exercise=video_to_exercise, student=request.user).exclude(attempt_content='hint'))
+        # Chokes if user_selection_val isn't provided, so set to blank
+        post_selection_val = request.POST.get('user_selection_val', '')
+        # Only increment attempts if it's not a hint request
+        if request.POST['attempt_content'] != 'hint':
+            attempts += 1
         problem_activity = ProblemActivity(student = user,
                                            video_to_exercise = video_to_exercise,
                                            complete = request.POST['complete'],
                                            attempt_content = request.POST['attempt_content'],
                                            count_hints = request.POST['count_hints'],
                                            time_taken = request.POST['time_taken'],
-                                           attempt_number = attempts + 1,
+                                           seed = request.POST['seed'],
+                                           attempt_number = attempts,
                                            problem_type = request.POST['problem_type'],
-                                           user_selection_val = request.POST['user_selection_val'],
+                                           user_selection_val = post_selection_val,
                                            user_choices = request.POST['user_choices'])
 
     #In case no problem id is specified in template
@@ -104,6 +123,8 @@ def attempt(request, problemId):
     problem_activity.save()
     if request.POST['complete'] == "1":
         activityConfirmation = '{"exercise_status":"complete", "attempt_num": ', problem_activity.attempt_number, '}'
+    elif request.POST['attempt_content'] == "hint":
+        activityConfirmation = '{"exercise_status":"hint", "attempt_num": ', problem_activity.attempt_number, '}'
     else:
         activityConfirmation = '{"exercise_status":"wrong", "attempt_num": ', problem_activity.attempt_number, '}'
     return HttpResponse(activityConfirmation)
@@ -114,6 +135,7 @@ def create_form(request, course_prefix, course_suffix):
         common_page_data = get_common_page_data(request, course_prefix, course_suffix)
     except:
         raise Http404
+
     data = {'common_page_data': common_page_data}
     form = CreateProblemSet(course=common_page_data['course'],
                             initial={'late_penalty':10,
@@ -153,21 +175,23 @@ def create_action(request):
     course_prefix = request.POST.get("course_prefix")
     course_suffix = request.POST.get("course_suffix")
     common_page_data = get_common_page_data(request, course_prefix, course_suffix)
-
     data = {'common_page_data': common_page_data, 'course_prefix': course_prefix, 'course_suffix': course_suffix}
-
+    
     if request.method == 'POST':
         pset = ProblemSet(course = common_page_data['course'])
         form = CreateProblemSet(request.POST, request.FILES, course=common_page_data['course'], instance=pset)
         if form.is_valid():
             new_pset = form.save(commit=False)
             new_pset.course = common_page_data['course']
-            new_pset.mode = 'staging'
+            new_pset.mode = 'draft'
             new_pset.handle = course_prefix + "--" + course_suffix
             new_pset.path = "/"+request.POST['course_prefix']+"/"+request.POST['course_suffix']+"/problemsets/"+new_pset.slug+"/load_problem_set"
 
             new_pset.save()
-            new_pset.create_production_instance()
+            section = new_pset.section
+            new_pset.index = section.getNextIndex()
+            new_pset.save()
+            new_pset.create_ready_instance()
             return HttpResponseRedirect(reverse('problemsets.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], new_pset.slug,)))
 
     else:
@@ -245,7 +269,7 @@ def manage_exercises(request, course_prefix, course_suffix, pset_slug):
             exercise.save()
 
             index = len(ProblemSetToExercise.objects.getByProblemset(pset))
-            psetToEx = ProblemSetToExercise(problemSet=pset, exercise=exercise, number=index, is_deleted=0, mode='staging')
+            psetToEx = ProblemSetToExercise(problemSet=pset, exercise=exercise, number=index, is_deleted=0, mode='draft')
             psetToEx.save()
             return HttpResponseRedirect(reverse('problemsets.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], pset.slug,)))
 
@@ -266,7 +290,7 @@ def add_existing_exercises(request):
     exercise_ids = request.POST.getlist('exercise')
     exercises = Exercise.objects.filter(id__in=exercise_ids)
     for exercise in exercises:
-        psetToEx = ProblemSetToExercise(problemSet=pset, exercise=exercise, number=len(ProblemSetToExercise.objects.getByProblemset(pset)), is_deleted=0, mode='staging')
+        psetToEx = ProblemSetToExercise(problemSet=pset, exercise=exercise, number=len(ProblemSetToExercise.objects.getByProblemset(pset)), is_deleted=0, mode='draft')
         psetToEx.save()
     return HttpResponseRedirect(reverse('problemsets.views.manage_exercises', args=(request.POST['course_prefix'], request.POST['course_suffix'], pset.slug,)))
 
@@ -319,8 +343,11 @@ def read_exercise(request, course_prefix, course_suffix, exercise_name):
     except:
         raise Http404
 
-    exercise = Exercise.objects.distinct().get(problemSet__course=common_page_data["course"], fileName=exercise_name)
-
+    
+    try:
+        exercise = Exercise.objects.distinct().get(problemSet__course=common_page_data["course"], fileName=exercise_name)
+    except Exercise.DoesNotExist:
+        exercise = Exercise.objects.distinct().get(video__course=common_page_data["course"], fileName=exercise_name)
     # return the contents of the file as an HTTP response.  Trust that it's there.
     #
     # TODO: put exception handling around this, figure out how to handle S3 errors

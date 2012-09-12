@@ -8,11 +8,11 @@ logger=logging.getLogger(__name__)
 
 def get_common_page_data(request, prefix, suffix):
     
-    production_course = Course.objects.get(handle=prefix+"--"+suffix, mode='production')
-    staging_course = Course.objects.get(handle=prefix+"--"+suffix, mode='staging')
+    ready_course = Course.objects.get(handle=prefix+"--"+suffix, mode='ready')
+    draft_course = Course.objects.get(handle=prefix+"--"+suffix, mode='draft')
     
-    course_mode = 'production'
-    course = production_course
+    course_mode = 'ready'
+    course = ready_course
     
     can_switch_mode = False
     is_course_admin = False
@@ -43,12 +43,12 @@ def get_common_page_data(request, prefix, suffix):
             break
             
     
-    if can_switch_mode and ('course_mode' in request.session) and (request.session['course_mode'] == 'staging'):
-        course_mode = 'staging'
-        course = staging_course
+    if can_switch_mode and ('course_mode' in request.session) and (request.session['course_mode'] == 'draft'):
+        course_mode = 'draft'
+        course = draft_course
         
     # View mode
-    if course_mode == 'staging':
+    if course_mode == 'draft':
         view_mode = 'edit'
         if request.GET.get('view_mode') and request.GET.get('view_mode') == 'preview':
             view_mode = 'view'
@@ -56,16 +56,19 @@ def get_common_page_data(request, prefix, suffix):
         view_mode = 'view'
     
     # Course info pages
-    course_info_pages = AdditionalPage.objects.getByCourseAndMenuSlug(course=course, menu_slug='course_info')
-        
+    course_info_pages = []
+    for page in AdditionalPage.objects.getByCourseAndMenuSlug(course=course, menu_slug='course_info').all():
+        if view_mode == 'edit' or page.description:
+            course_info_pages.append(page)
+    
     current_datetime = datetime.datetime.now()
     effective_current_datetime = current_datetime
     
     page_data = {
         'request': request,
         'course': course,
-        'production_course': production_course,
-        'staging_course': staging_course,
+        'ready_course': ready_course,
+        'draft_course': draft_course,
         'course_prefix':prefix,
         'course_suffix':suffix,
         'course_mode':course_mode,

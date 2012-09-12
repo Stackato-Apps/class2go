@@ -1,24 +1,45 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, make_option
 from c2g.models import *
 from django.contrib.auth.models import User,Group
 from datetime import datetime
-from random import randrange
+from random import randrange, shuffle
+from django.db import connection, transaction
 
 class Command(BaseCommand):
-    help = "Populates the db with test development data. \n This command is <not> available on production for obvious reasons. \n Settings can be made in file db_test_data/management/commands/db_populate.py"
-
+    help = "Populates the db with test development data. \n This command is <not> available on ready for obvious reasons. \n Settings can be made in file db_test_data/management/commands/db_populate.py"
+    
+    option_list = BaseCommand.option_list + (
+        make_option('--massive',
+            action='store_true',
+            dest='massive',
+            default=False,
+            help='Populate the DB with mass-scale data (Warning: Can take a very long time to create the data on slower machines)'),
+        )
+        
     def handle(self, *args, **options):
         delete_db_data()
-
+        
+        if ('massive' in options) and (options['massive']):
+            # Don't create fewer than 4 profs, 4 tas, 4 readonly tas, and 40 students
+            user_counts = {'num_professors':10, 'num_tas':10, 'num_readonly_tas':10, 'num_students':40}
+            content_counts = {'num_massive_courses':1, 'num_sections_per_course':2, 'num_videos_per_section':5}
+        else:
+            user_counts = {'num_professors':4, 'num_tas':4, 'num_readonly_tas':4, 'num_students':40}
+            content_counts = {'num_massive_courses':0, 'num_sections_per_course':2, 'num_videos_per_section':5}
+            
+        
         # Create users
-        users = create_users()
+        print "      Creating users \r"
+        print "      ----------------- \r"
+        users = create_users(user_counts)
 
         # Create institutions
         institutions = create_institutions()
 
         # Create courses
-        create_courses(institutions, users)
-
+        create_courses(institutions, users, content_counts)
+        
+        print "      ----------------------------- \r"
         print "      Successfully populated the db \r"
 
 
@@ -42,10 +63,18 @@ def delete_db_data():
     Group.objects.all().delete()
     User.objects.all().delete()
 
-def create_users():
+    #reset auto-increment counters
+    cursor = connection.cursor()
+
+    # Data modifying operation - commit required
+    cursor.execute('alter table c2g_videos auto_increment = 1')
+
+
+def create_users(user_counts):
+
     # Create professor accounts
     professors = []
-    for i in range(3):
+    for i in range(user_counts['num_professors']):
         professors.append(User.objects.create_user('professor_' + str(i)))
         professors[i].set_password('class2go')
         professors[i].first_name = "Tess"
@@ -53,36 +82,48 @@ def create_users():
         professors[i].email = "professor_%d@stanford.edu" % i
         professors[i].is_staff = 1
         professors[i].save()
+        
+        if user_counts['num_professors'] > 500 and (i%500 == 0):
+            print "      Creating users >> Creating professors >> (%d/%d)complete\r" % (i,user_counts['num_professors'])
 
     # Create TA accounts
     tas = []
-    for i in range(3):
+    for i in range(user_counts['num_tas']):
         tas.append(User.objects.create_user('ta_' + str(i)))
         tas[i].set_password('class2go')
         tas[i].first_name = "Alan"
         tas[i].last_name = "Assistant"
         tas[i].email = "ta_%d@stanford.edu" % i
         tas[i].save()
+        
+        if user_counts['num_tas'] > 500 and (i%500 == 0):
+            print "      Creating users >> Creating tas >> (%d/%d)complete\r" % (i,user_counts['num_tas'])
 
     # Create Readonly-TA accounts
     readonly_tas = []
-    for i in range(3):
+    for i in range(user_counts['num_readonly_tas']):
         readonly_tas.append(User.objects.create_user('readonly_ta_' + str(i)))
         readonly_tas[i].set_password('class2go')
         readonly_tas[i].first_name = "Roger"
         readonly_tas[i].last_name = "Readonly"
         readonly_tas[i].email = "readonly_ta_%d@stanford.edu" % i
         readonly_tas[i].save()
+        
+        if user_counts['num_readonly_tas'] > 500 and (i%500 == 0):
+            print "      Creating users >> Creating read-only tas >> (%d/%d)complete\r" % (i,user_counts['num_readonly_tas'])
 
     # Create student accounts
     students = []
-    for i in range(40):
+    for i in range(user_counts['num_students']):
         students.append(User.objects.create_user('student_' + str(i)))
         students[i].set_password('class2go')
         students[i].first_name = "Sarah"
         students[i].last_name = "Student"
         students[i].email = "student_%d@stanford.edu" % i
         students[i].save()
+        
+        if user_counts['num_students'] > 500 and (i%500 == 0):
+            print "      Creating users >> Creating students >> (%d/%d)complete\r" % (i,user_counts['num_students'])
 
     return {'professors':professors, 'tas':tas, 'readonly_tas':readonly_tas, 'students':students}
 
@@ -107,8 +148,9 @@ def create_institutions():
 
     return institutions
 
-def create_courses(institutions,users):
-    # Currently, only create the NLP course
+def create_courses(institutions,users,content_counts):
+        
+    # NLP Course
     data = {
         'institution': institutions[0],
         'title': 'Natural Language Processing',
@@ -117,11 +159,14 @@ def create_courses(institutions,users):
         'year': 2012,
         'calendar_start': datetime(2013, 7, 27),
         'calendar_end': datetime(2013, 8, 12),
+        'contact': 'nlp@123.com',
         'list_publicly': 1,
         'handle':'nlp--Fall2012',
         'members': users,
     }
-    create_course_nlp(data, users)
+    print "      Creating nlp course\r"
+    print "      ------------------- \r"
+    create_course_nlp(data, {'professors':users['professors'][0:3],'tas':users['tas'][0:3],'readonly_tas':users['readonly_tas'][0:3],'students':users['students'][0:39]})
 
     data = {
             'institution': institutions[0],
@@ -131,12 +176,294 @@ def create_courses(institutions,users):
             'year': 2012,
             'calendar_start': datetime(2013, 7, 27),
             'calendar_end': datetime(2013, 8, 12),
+            'contact': 'crypto@123.com',
             'list_publicly': 1,
             'handle':'crypto--Fall2012',
             'members': users,
     }
+    print "      Creating crypto course\r"
+    print "      ---------------------- \r"
+    create_course_crypto(data, {'professors':users['professors'][0:3],'tas':users['tas'][0:3],'readonly_tas':users['readonly_tas'][0:3],'students':users['students'][0:39]})
+    
+    # Massive: Create num_massive_courses massive courses
+    for i in range(content_counts['num_massive_courses']):
+        print "      Creating massive course %d of %d \r" % (i,content_counts['num_massive_courses'])
+        print "      ------------------------------------- \r"
+        create_course_massive(i, users, institutions, content_counts)
+        
+def create_course_massive(index, users, institutions, content_counts):
+    
+    terms = ["Fall", "Winter", "Spring", "Summer"]
+    term_index = 0
+    term = terms[term_index]
+    
+    year = 2012
+    
+    if term == "Fall":
+        start_date = datetime(year, 9, randrange(1,21))
+        end_date = datetime(year, 12, randrange(15,31))
+    elif term == "Winter":
+        start_date = datetime(year, 1, randrange(1,21))
+        end_date = datetime(year, 3, randrange(15,31))
+    elif term == "Spring":
+        start_date = datetime(year, 4, randrange(1,21))
+        end_date = datetime(year, 6, randrange(1,10))
+    elif term == "Summer":
+        start_date = datetime(year, 6, randrange(21,30))
+        end_date = datetime(year, 9, randrange(1,4))
 
-    create_course_crypto(data, users)
+    # Create the course instances
+    print "      Creating massive course %d of %d >> Creating course instances \r" % (index,content_counts['num_massive_courses'])
+    student_group = Group.objects.create(name="Student Group for massive course " + " %d" % index)
+    instructor_group = Group.objects.create(name="Instructor Group for massive course " + " %d" % index)
+    tas_group = Group.objects.create(name="TAS Group for massive course " + " %d" % index)
+    readonly_tas_group = Group.objects.create(name="Readonly TAS Group for massive course " + " %d" % index)
+    
+    course = Course(
+            institution = institutions[0],
+            student_group = student_group,
+            instructor_group = instructor_group,
+            tas_group = tas_group,
+            readonly_tas_group = readonly_tas_group,
+            title = "Massive Course %d" % index,
+            description = "Massive course %d description" % index,
+            term = term,
+            year = year,
+            calendar_start = start_date,
+            calendar_end = end_date,
+            list_publicly = 1,
+            mode='draft',
+            handle = "course"+str(index) + "--" + term + str(year)
+        )
+
+    course.save()
+    course.create_ready_instance()
+    
+    # Add random users to course
+    print "      Creating massive course %d of %d >> Adding Users >> Professors \r" % (index,content_counts['num_massive_courses'])
+    for i in range(len(users['professors'])):
+        instructor_group.user_set.add(users['professors'][i])
+    
+    print "      Creating massive course %d of %d >> Adding Users >> TAs \r" % (index,content_counts['num_massive_courses'])
+    for i in range(len(users['tas'])):
+        tas_group.user_set.add(users['tas'][i])
+    
+    print "      Creating massive course %d of %d >> Adding Users >> Read-only TAs \r" % (index,content_counts['num_massive_courses'])
+    for i in range(len(users['readonly_tas'])):
+        readonly_tas_group.user_set.add(users['readonly_tas'][i])
+    
+    print "      Creating massive course %d of %d >> Adding Users >> Students \r" % (index,content_counts['num_massive_courses'])  
+    num_students = len(users['students'])
+    for i in range(num_students):
+        student_group.user_set.add(users['students'][i])
+        if num_students > 500 and i%500 == 0:
+            print "      Creating massive course %d of %d >> Adding Users >> Students >> (%d/%d) complete \r" % (index,content_counts['num_massive_courses'],i,num_students)
+    
+    print "      Creating massive course %d of %d >>  Adding course info pages\r" % (index,content_counts['num_massive_courses'])
+    # Create the overview page
+    str_ = ""
+    for i in range(1000):
+        str_ += "Overview for massive course %d" % index
+        
+    op = AdditionalPage(
+        course=course,
+        menu_slug='course_info',
+        title="Overview for massive course %d" % index,
+        description=str_,
+        slug='overview',
+        index=0,
+        mode='draft',
+    )
+    op.save()
+    op.create_ready_instance()
+    
+    # Create between 5 and 15 other course info menu pages
+    num_pages = randrange(5,15)
+    for i in range(num_pages):
+        str_ = ""
+        for j in range(1000):
+            str_ += "Page %d for massive course %d" % (i, index)
+            
+        p = AdditionalPage(
+            course=course,
+            menu_slug='course_info',
+            title= "Page %d for massive course %d" % (i, index),
+            description=str_,
+            slug='course_%d_page_%d' % (index, i),
+            index=i+1,
+            mode='draft',
+        )
+        p.save()
+        p.create_ready_instance()
+        
+    # Add 20 announcements
+    print "      Creating massive course %d of %d >>  Adding announcements\r" % (index,content_counts['num_massive_courses'])
+    for i in range(20):
+        str_ = ""
+        for j in range(100):
+            str_ += "Announcement %d for Course %d" % (i, index)
+        
+        a = Announcement(
+            owner = course.instructor_group.user_set.all()[0],
+            title = "Announcement %d for Course %d" % (i, index),
+            description = str_,
+            course = course
+        )
+        a.save()
+        a.create_ready_instance()
+        
+        
+    # Add exercises
+    print "      Creating massive course %d of %d >>  Adding exercises\r" % (index,content_counts['num_massive_courses'])
+    exercise1 = Exercise(
+        fileName = "P1_Levenshtein.html",
+        handle = "course"+str(index) + "--" + term + str(year)
+    )
+    exercise1.save()
+    
+    exercise2 = Exercise(
+        fileName = "P1_Porter.html",
+        handle = "course"+str(index) + "--" + term + str(year)
+    )
+    exercise2.save()
+    
+    exercise3 = Exercise(
+        fileName = "P1_Regexp.html",
+        handle = "course"+str(index) + "--" + term + str(year)
+    )
+    exercise3.save()
+    
+    exercise4 = Exercise(
+        fileName = "P1_Tokenize.html",
+        handle = "course"+str(index) + "--" + term + str(year)
+    )
+    exercise4.save()
+    
+    exercises = [exercise1, exercise2, exercise3, exercise4]
+    
+    
+    # Sections, each with 5 videos, 1 problem set, and 1 static page
+    yt_ids = ['BJiVRIPVNxU','dBVlwb15SBM','zJSqHRuD2C4','WMC3AjgYf3A','xOfEYI61f3k','Gh63CeMzav8','LRq7om7vMEc']
+    durations = [722, 686, 366, 866, 426, 355, 522]
+    print "      Creating massive course %d of %d >>  Adding content sections\r" % (index,content_counts['num_massive_courses'])
+    
+    for i in range(content_counts['num_sections_per_course']):
+        draft_section = ContentSection(course=course, title="Section %d in Course %d" % (i, index), index=i, mode='draft')
+        draft_section.save()
+        draft_section.create_ready_instance()
+        
+        # Create 5 videos
+        yt_index = randrange(0,6)
+        for j in range(5):
+            print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding Video %d of 5\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'], j)
+            print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding Video %d of 5 >> Creating video objects\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'], j)
+            video = Video(
+                course = course,
+                section = draft_section,
+                title = "Video " + str(j) + " in Section " + str(i) + " in Course " +  str(index),
+                description = "Description for Video " + str(j) + " in Section " + str(i) + " in Course " +  str(index),
+                type = "youtube",
+                url = yt_ids[yt_index],
+                duration = durations[yt_index],
+                slug = "section_" + str(i) + "_video_" + str(j),
+                mode = 'draft',
+                handle = "course"+str(index) + "--" + term + str(year),
+                index = j,
+            )
+            video.save()
+            video.create_ready_instance()
+            prod = video.image; prod.live_datetime = datetime.now(); prod.save();
+            
+            # Add Exercises to Videos
+            print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding Video %d of 5 >> Adding exercises to video\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'], j)
+            v2es = []
+            for exercise in exercises:
+                v2e = VideoToExercise(video=video, exercise=exercise, video_time=randrange(10,durations[yt_index]-10), is_deleted=0, mode='draft')
+                v2e.save()
+                v2e = VideoToExercise(video=video.image, exercise=exercise, video_time=randrange(10,durations[yt_index]-10), is_deleted=0, mode='ready')
+                v2e.save()
+                v2es.append(v2e)
+            
+            # Create view progress and exercise attempts for 75% of the users
+            stud_index = 0
+            for student in course.student_group.user_set.all():
+                if randrange(0,3) > 0:
+                    view_activity = VideoActivity(student = student, video = video.image, course = course.image, start_seconds = randrange(0,durations[yt_index]))
+                    view_activity.save()
+                    
+                    for k in range(len(v2es)):
+                        if v2es[k].video_time < view_activity.start_seconds:
+                            problem_activity = ProblemActivity(
+                                student = student,
+                                video_to_exercise = v2es[k]
+                            )
+                            problem_activity.save()
+                            
+                stud_index += 1
+                if num_students > 500 and stud_index%500 == 0:
+                    print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding Video %d of 5 >> Adding student video activity (%d/%d)\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'], j, stud_index, num_students)
+                            
+        # Create 1 static page
+        print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding 1 static page\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'])
+        str_ = ""
+        for j in range(1000):
+            str_ += "Page for section %d in massive course %d" % (i, index)
+            
+        p = AdditionalPage(
+            course=course,
+            section = draft_section,
+            title= "Page for section %d in massive course %d" % (i, index),
+            description=str_,
+            slug='course_%d_section_%d_page' % (index, i),
+            index=6,
+            mode='draft',
+        )
+        p.save()
+        p.create_ready_instance()
+        prod = p.image; prod.live_datetime = datetime.now(); prod.save();
+                    
+        # Create 1 problem set
+        print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding 1 problem set\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'])
+        ps = ProblemSet(
+            course = course,
+            section = draft_section,
+            slug = "course_"+str(index)+"_section_"+str(i)+"_ps",
+            title = "Problem set for section %d" % i,
+            description = "PS Description",
+            due_date = datetime(2012, 9,19),
+            grace_period = datetime(2012, 9,19),
+            partial_credit_deadline = datetime(2012, 9,19),
+            assessment_type = 'formative',
+            late_penalty = 30,
+            submissions_permitted = 3,
+            resubmission_penalty = 30,
+            randomize = False,
+        )
+        ps.save()
+        ps.create_ready_instance()
+        prod = ps.image; prod.live_datetime = datetime.now(); prod.save();
+        
+        for k in range(len(exercises)):
+            ps2e = ProblemSetToExercise(problemSet=ps, exercise=exercises[k], number=k, is_deleted=0, mode='draft')
+            ps2e.save()
+            ps2e = ProblemSetToExercise(problemSet=ps.image, exercise=exercises[k], number=k, is_deleted=0, mode='ready')
+            ps2e.save()
+            
+            stud_index = 0
+            for student in course.student_group.user_set.all():
+                if randrange(0,3) > 0:
+                    problem_activity = ProblemActivity(
+                        student = student,
+                        problemset_to_exercise = ps2e
+                    )
+                    problem_activity.save()
+                    
+                stud_index += 1
+                if num_students > 500 and stud_index%500 == 0:
+                    print "      Creating massive course %d of %d >>  Adding content section %d of %d >> Adding 1 problem set >> Exercise %d of 4 >> Student activity (%d/%d)\r" % (index,content_counts['num_massive_courses'], i, content_counts['num_sections_per_course'], k, stud_index, num_students)
+            
+        
+        
 
 def create_course_nlp(data, users):
     # Create the user groups
@@ -169,11 +496,11 @@ def create_course_nlp(data, users):
             calendar_start = data['calendar_start'],
             calendar_end = data['calendar_end'],
             list_publicly = data['list_publicly'],
-            mode='staging',
+            mode='draft',
             handle = data['handle'])
 
     course.save()
-    course.create_production_instance()
+    course.create_ready_instance()
 
     # Create the overview page
     op = AdditionalPage(
@@ -183,10 +510,10 @@ def create_course_nlp(data, users):
         description='Natural language processing is the technology for dealing with our most ubiquitous product: human language, as it appears in emails, web pages, tweets, product descriptions, newspaper stories, social media, and scientific articles, in thousands of languages and varieties. In the past decade, successful natural language processing applications have become part of our everyday experience, from spelling and grammar correction in word processors to machine translation on the web, from email spam detection to automatic question answering, from detecting people\'s opinions about products or services to extracting appointments from your email. In this class, you\'ll learn the fundamental algorithms and mathematical models for human alanguage processing and how you can use them to solve practical problems in dealing with language data wherever you encounter it.',
         slug='overview',
         index=0,
-        mode='staging',
+        mode='draft',
     )
     op.save()
-    op.create_production_instance()
+    op.create_ready_instance()
 
     # Create announcements
     titles = [
@@ -233,11 +560,16 @@ def create_course_nlp(data, users):
     data['slug']='P1'
     data['description'] = 'This is the first problem set. Practice some question on Regular Expressions. Remember to work your problems out on a separate piece of paper first because you only get one try on these. Miss on and you have a D!'
     data['title'] = 'Problem Set 1: Regular Expressions'
-    data['path']='/static/latestKhan/exercises/P1.html'
+    data['path']='/nlp/Fall2012/problemsets/P1/load_problem_set'
     data['due_date']='2012-07-20'
-    data['partial_credit_deadline']='2012-07-27'
-
-    #pset1 = create_problem_set(data, users)
+    data['partial_credit_deadline']='2012-09-27'
+    data['grace_period']='2012-10-27'
+    data['late_penalty']=1
+    data['submissions_permitted']=0
+    data['resubmission_penalty']=25
+    data['assessment_type']='formative'
+    
+    pset1 = create_problem_set(data, users)
 
     data['course'] = course
     data['section'] = sections[1]
@@ -245,41 +577,26 @@ def create_course_nlp(data, users):
     data['slug']='P2'
     data['description'] = 'This problem set will test your knowledge of Joint Probability. Each question is worth one point and your final exam is worth 100 points so these questions are basically useless. But you have to do them because an incomplete assignment disallows you from passing the class. Have fun with this problem set!'
     data['title']='Problem Set 2: Joint Probability'
-    data['path']='/static/latestKhan/exercises/P2.html'
+    data['path']='/nlp/Fall2012/problemsets/P2/load_problem_set'
     data['due_date']='2012-07-27'
     data['partial_credit_deadline']='2012-08-03'
+    data['grace_period']='2012-10-27'
+    data['late_penalty']=1
+    data['submissions_permitted']=0
+    data['resubmission_penalty']=25
+    data['assessment_type']='formative'
 
     # Removing second problem set
     # KELVIN TODO -- fix create_problem_set so it handles two problem sets referencing the same exercises
     # duplicate exercise entries screws other things up.
     #
-    # pset2 = create_problem_set(data, users)
+    pset2 = create_problem_set(data, users)
 
     #Create exercises
+    exercise1_1 = save_exercise(pset1, "xx_P1_Regexp.html", 1, 'nlp--Fall2012', 'nlp/Fall2012/exercises/xx_P1_Regexp.html')
+    exercise1_2 = save_exercise(pset1, "xx_P1_Tokenize.html", 2, 'nlp--Fall2012', 'nlp/Fall2012/exercises/xx_P1_Tokenize.html')
 
-#    exercise1_1 = save_exercise(pset1, "P1_Levenshtein.html", 1)
-#    exercise1_2 = save_exercise(pset1, "P1_Regexp.html", 2)
-#    exercise1_3 = save_exercise(pset1, "P1_Tokenize.html", 3)
-
-#    exercise2_1 = save_exercise(pset2, "P2_Add_one_smoothing.html", 1)
-#    exercise2_2 = save_exercise(pset2, "P2_Joint.html", 2)
-#    exercise2_3 = save_exercise(pset2, "P2_Lexical1.html", 3)
-#    exercise2_4 = save_exercise(pset2, "P2_NER1.html", 4)
-#    exercise2_5 = save_exercise(pset2, "P2_Spelling.html", 5)
-
-    #Create problems
-
-    # save_problem(exercise1_1, 'p1')
-    # save_problem(exercise1_1, 'p2')
-    # save_problem(exercise1_2, 'p1')
-    # save_problem(exercise1_3, 'p1')
-
-    # save_problem(exercise2_1, 'p1')
-    # save_problem(exercise2_1, 'p2')
-    # save_problem(exercise2_2, 'p1')
-    # save_problem(exercise2_3, 'p1')
-    # save_problem(exercise2_4, 'p1')
-    # save_problem(exercise2_5, 'p1')
+    exercise2_1 = save_exercise(pset2, "xx_P2_Lexical1.html", 1, 'nlp--Fall2012', 'nlp/Fall2012/exercises/xx_P2_Lexical1.html')
 
     # Create news events
     titles = [
@@ -313,7 +630,7 @@ def create_course_crypto(data, users):
     user4=User.objects.get(username='dcadams_auto');
     user5=User.objects.get(username='jinpa_auto');
     user6=User.objects.get(username='halawa_auto');
-    
+
     # Create the user groups
     r = randrange(0,100000000)
     student_group = Group.objects.create(name="Student Group for class2go course " + data['handle'] + " %d" % r)
@@ -344,11 +661,11 @@ def create_course_crypto(data, users):
             calendar_start = data['calendar_start'],
             calendar_end = data['calendar_end'],
             list_publicly = data['list_publicly'],
-            mode='staging',
+            mode='draft',
             handle = data['handle'])
 
     course.save()
-    course.create_production_instance()
+    course.create_ready_instance()
 
     # Create the overview page
     op = AdditionalPage(
@@ -358,10 +675,10 @@ def create_course_crypto(data, users):
         description='Cryptography is an indispensable tool for protecting information in computer systems. This course explains the inner workings of cryptographic primitives and how to correctly use them. Students will learn how to reason about the security of cryptographic constructions and how to apply this knowledge to real-world applications.',
         slug='overview',
         index=0,
-        mode='staging',
+        mode='draft',
     )
     op.save()
-    op.create_production_instance()
+    op.create_ready_instance()
 
     # Create announcements
     titles = [
@@ -411,8 +728,12 @@ def create_course_crypto(data, users):
     data['path']='/static/latestKhan/exercises/P1.html'
     data['due_date']='2012-07-20'
     data['partial_credit_deadline']='2012-07-27'
+    data['grace_period']='2013-07-27'
+    data['late_penalty'] = 5
+    data['submissions_permitted'] = 0
+    data['resubmission_penalty'] = 10
 
-    #pset1 = create_problem_set(data, users)
+  #  pset1 = create_problem_set(data, users)
 
     data['course'] = course
     data['section'] = sections[1]
@@ -432,7 +753,16 @@ def create_course_crypto(data, users):
 
     #Create exercises
 
-#    exercise1_1 = save_exercise(pset1, "P1_Levenshtein.html", 1)
+    #exercise1_1 = save_exercise(pset1, "xx_P1_Levenshtein_1Q.html", 1, 'crypto#$!Fall2012')
+    
+  #  url = 'http://localhost:8080/nlp/Fall2012/problemsets/P1/manage_exercise'
+  #  payload = {'user': 'professor_1', 'password': 'class2go'}
+
+  #  r = requests.post(url, data=payload)
+  #  print '------' + str(r.text)
+  #  print '++++++' + str(r.status_code)
+    
+    
 #    exercise1_2 = save_exercise(pset1, "P1_Regexp.html", 2)
 #    exercise1_3 = save_exercise(pset1, "P1_Tokenize.html", 3)
 
@@ -467,7 +797,6 @@ def create_course_crypto(data, users):
 
 
 
-
 def create_announcement(course, title, description, index, owner):
     announcement = Announcement(
         course=course,
@@ -475,20 +804,20 @@ def create_announcement(course, title, description, index, owner):
         description = description,
         index = index,
         owner = owner,
-        mode = 'staging',
+        mode = 'draft',
     )
     announcement.save()
-    announcement.create_production_instance()
+    announcement.create_ready_instance()
 
 def create_content_section(course, title, index):
     section = ContentSection(
         course=course,
         title=title,
         index=index,
-        mode='staging',
+        mode='draft',
     )
     section.save()
-    section.create_production_instance()
+    section.create_ready_instance()
     return section
 
 def create_video(data, users):
@@ -504,11 +833,11 @@ def create_video(data, users):
         slug=data['slug'],
         file="default",
         index=data['index'],
-        mode='staging',
+        mode='draft',
         handle=data['course'].handle,
     )
     video.save()
-    video.create_production_instance()
+    video.create_ready_instance()
 
     for user in users['students']:
         video_activity = VideoActivity(
@@ -537,16 +866,21 @@ def create_problem_set(data, users):
         path = data['path'],
         due_date = data['due_date'],
         partial_credit_deadline = data['partial_credit_deadline'],
+        grace_period = data['grace_period'],
+        late_penalty = data['late_penalty'],
+        submissions_permitted = data['submissions_permitted'],
+        resubmission_penalty = data['resubmission_penalty'],
         description = data['description'],
-        mode='staging',
+        mode='draft',
         index=data['index'],
+        assessment_type=data['assessment_type']
     )
     problem_set.save()
-    prod_instance =  problem_set.create_production_instance()
+    prod_instance =  problem_set.create_ready_instance()
 
     problem_set.save()
 
-    # @todo: Create exercises, problems, and user activity for problem sets based on the new staging/production paradigm
+    # @todo: Create exercises, problems, and user activity for problem sets based on the new draft/ready paradigm
 
     #Shouldn't need to populate exercises since they can be uploaded now
     #save_exercise(problem_set, "P1_Levenshtein.html", 1)
@@ -559,13 +893,18 @@ def create_problem_set(data, users):
     return problem_set
 
 
-def save_exercise(problemSet, fileName, number):
+def save_exercise(problemSet, fileName, number, handle, file):
     ex = Exercise(fileName = fileName)
+    ex.file = file
+    ex.handle = handle
     ex.save()
+
     psetToEx = ProblemSetToExercise(problemSet = problemSet,
                                     exercise = ex,
                                     number = number)
     psetToEx.save()
+    #psetToEx.create_ready_instance()
+
     return ex
 
 def save_problem(exercise, slug):

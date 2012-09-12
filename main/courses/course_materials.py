@@ -19,7 +19,7 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
                     if page.section_id == section.id:
                         item = {'type':'additional_page', 'additional_page':page, 'index':page.index}
 
-                        if common_page_data['course_mode'] == 'staging':
+                        if common_page_data['course_mode'] == 'draft':
                             prod_page = page.image
                             if not prod_page.live_datetime:
                                 visible_status = "<span style='color:#A00000;'>Not Live</span>"
@@ -43,7 +43,7 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
                     if file.section_id == section.id:
                         item = {'type':'file', 'file':file, 'index':file.index}
 
-                        if common_page_data['course_mode'] == 'staging':
+                        if common_page_data['course_mode'] == 'draft':
                             prod_file = file.image
                             if not prod_file.live_datetime:
                                 visible_status = "<span style='color:#A00000;'>Not Live</span>"
@@ -64,11 +64,14 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
 
             if get_video_content:
                 for video in videos:
-                    #if video.section_id == section.id and (common_page_data['course_mode'] == 'staging' or (video.live_datetime and video.live_datetime < common_page_data['effective_current_datetime'])):
-                    if video.section_id == section.id:
+                    #if video.section_id == section.id and (common_page_data['course_mode'] == 'draft' or (video.live_datetime and video.live_datetime < common_page_data['effective_current_datetime'])):
+                    if video.image and video.section_id == section.id:
                         item = {'type':'video', 'video':video, 'completed_percent': 0, 'index':video.index}
 
-                        if common_page_data['course_mode'] == 'staging':
+                        videoToExs = VideoToExercise.objects.getByVideo(video)
+                        numQuestions = len(videoToExs)
+
+                        if common_page_data['course_mode'] == 'draft':
                             prod_video = video.image
                             if not prod_video.live_datetime:
                                 visible_status = "<span style='color:#A00000;'>Not Live</span>"
@@ -94,15 +97,19 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
                                 else:
                                     item['completed_percent'] = 0
 
+                        item['numQuestions'] = numQuestions
                         section_dict['items'].append(item)
 
             if get_pset_content:
                 for problem_set in problem_sets:
-                    #if problem_set.section_id == section.id and (common_page_data['course_mode'] == 'staging' or (problem_set.live_datetime and problem_set.live_datetime < common_page_data['effective_current_datetime'])):
+                    #if problem_set.section_id == section.id and (common_page_data['course_mode'] == 'draft' or (problem_set.live_datetime and problem_set.live_datetime < common_page_data['effective_current_datetime'])):
                     if problem_set.section_id == section.id:
                         item = {'type':'problem_set', 'problem_set':problem_set, 'index':problem_set.index}
 
-                        if common_page_data['course_mode'] == 'staging':
+                        psetToExs = ProblemSetToExercise.objects.getByProblemset(problem_set)
+                        numQuestions = len(psetToExs)
+                            
+                        if common_page_data['course_mode'] == 'draft':
                             prod_problem_set = problem_set.image
                             if not prod_problem_set.live_datetime:
                                 visible_status = "<span style='color:#A00000;'>Not Live</span>"
@@ -119,8 +126,6 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
 
                             item['visible_status'] = visible_status
                         else:
-                            psetToExs = ProblemSetToExercise.objects.getByProblemset(problem_set)
-                            numQuestions = len(psetToExs)
 
                             numCompleted = problem_set.get_progress(common_page_data['request'].user)
                             score = problem_set.get_score(common_page_data['request'].user)
@@ -130,15 +135,15 @@ def get_course_materials(common_page_data, get_video_content=False, get_pset_con
                                 progress = 0
                             else:
                                 progress = 100.0*numCompleted/numQuestions
-
-                            item['numQuestions'] = numQuestions
+                                
                             item['numCompleted'] = numCompleted
                             item['score'] = score
                             item['progress'] = progress
 
+                        item['numQuestions'] = numQuestions
                         section_dict['items'].append(item)
 
-            if common_page_data['course_mode'] == 'staging' or len(section_dict['items']) > 0:
+            if common_page_data['course_mode'] == 'draft' or len(section_dict['items']) > 0:
                 section_dict['items'] = sorted(section_dict['items'], key=lambda k: k['index'])
                 section_structures.append(section_dict)
                 index += 1

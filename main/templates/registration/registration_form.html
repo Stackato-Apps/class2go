@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% load url from future %}
+{% block topnav %} {% endblock topnav %}
+{% block navbar %} {% endblock navbar %}
 
 {% block m_column_content %}
 {% if form.errors %}
@@ -10,17 +12,20 @@
 {% endif %}
 
 <div class="registration">
-	<h1>Register for Class2Go</h1>
+	<h1>Register for Stanford Online</h1>
 	<div class="well">
 		<form action="{% url 'registration_register' %}" method="post">
-		    {% csrf_token %}
-		    <table>
-		    {{ form.as_table }}
-		    </table>
+		    {% include 'registration/regforminputs.html' %}
 		    <div class="form-actions">
-		    	<input type="submit" value="Register" class="btn btn-primary btn-large" />
+                <p>
+                {{form.tos.errors}} {{form.tos}} I agree to Stanford Online's <a href="{% url 'c2g.views.tos' %}" target="_blank">Terms of Service</a>, 
+                <a href="{% url 'c2g.views.tos' %}#honor" target="_blank" >Honor Code</a>, and <a href="{% url 'c2g.views.tos' %}#privacy" target="_blank">Privacy Policy</a>
+
+                </p>
+		    	<input type="submit" value="Register" class="btn btn-primary btn-large" /> &nbsp; Already have an account?  <a href="{% url 'auth_login' %}?next=/{{request.GET.pre}}/{{request.GET.post}}"> Login instead</a>
 			</div>
 		</form>
+        
 	</div>
 </div>
 

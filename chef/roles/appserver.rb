@@ -1,12 +1,15 @@
 name "appserver"
-description "sophi appserver node"
+description "class2go appserver node -- on top of BITNAMI"
 
-override_attributes({
-    "sophi-bitnami-django" => {
-            "django-app" => "main"
-            }
-})
-
+override_attributes \
+    "class2go-bitnami-django" => {
+        "django-app" => "main"
+        },
+    "system" => {
+        "admin_user" =>  "bitnami",
+        "admin_group" => "bitnami",
+        "admin_home" =>  "/home/bitnami"
+    }
 
 # For now not doing an update/upgrade before everything else since it
 # can cause mysterious problems and takes so darn long.  have to do it 
@@ -14,14 +17,14 @@ override_attributes({
 
 run_list(
 #   "recipe[chef-client]",
-#   "recipe[sophi-update]",
+    "recipe[class2go-apt-update]",
     "recipe[gdata]",
-    "recipe[sophi-base]",
-    "recipe[sophi-python]",
-    "recipe[sophi-bitnami-django]",
-    "recipe[sophi-deploy]",
-    "recipe[sophi-logging]",
-    "recipe[sophi-database.py]",
-    "recipe[sophi-collectstatic]",
-    "recipe[sophi-bitnami-apache-restart]"
+    "recipe[class2go-base-bitnami]",
+    "recipe[class2go-python]",
+    "recipe[class2go-bitnami-django]",
+    "recipe[class2go-deploy]",
+    "recipe[class2go-logging]",
+    "recipe[class2go-database-config]",
+    "recipe[class2go-collectstatic]",
+    "recipe[class2go-bitnami-apache-restart]"
 )

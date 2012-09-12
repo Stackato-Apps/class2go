@@ -18,15 +18,16 @@ function onYouTubePlayerAPIReady() {
 
 function onPlayerReady(event) {
     //HotKey(player);
-    thumbSet.setupNavPanel();
-
+    
+    /*
     $('.quiz-thumb').each(function (idx) {
         $(this).click(function () {
             //console.log("Calling makeProblem for " + idx);
-            $('#problemarea').show();
-            KhanC2G.makeProblem(idx);
+            //$('#problemarea').show();
+            //KhanC2G.makeProblem(idx);
         });
     });
+     */
 }
 
 function onPlayerError(event) {
@@ -40,6 +41,13 @@ function onPlayerStateChange(event) {
 }
 
 var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) {
+    //console.log('initThumbnails');
+    var pVarsExternal = {};
+    //console.log("arguments...");
+    //console.log(arguments);
+    if (arguments[3]) {
+        pVarsExternal = arguments[3];
+    }
 
     var thumbSet = {
 
@@ -65,17 +73,12 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
 
             // slideIndices for the thumbnails
             slideIndices = c2gSlideIndicesObj;
-            //slideIndices = {"0":{"imgsrc":"lecture-0.jpg"},"5":{"imgsrc":"lecture-1.jpg"},"61":{"imgsrc":"lecture-2.jpg"},"86":{"imgsrc":"lecture-3.jpg"},"110":{"imgsrc":"lecture-4.jpg"},"163":{"imgsrc":"lecture-5.jpg"},"201":{"imgsrc":"lecture-6.jpg"},"284":{"imgsrc":"lecture-7.jpg"},"342":{"imgsrc":"lecture-8.jpg"},"374":{"imgsrc":"lecture-9.jpg"},"418":{"imgsrc":"lecture-10.jpg"}};
 
             // questions for the specific thumbs which invoke an exercise
             questions = c2gQuizIndicesObj;
-            /*
-            questions = {
-                "162": {"time": 162, "problemDiv": "levenshtein-1"},
-                "163": {"time": 163, "problemDiv": "non-levenshtein"},
-                "164": {"time": 164, "problemDiv": "levenshtein-2"}
-            };
-            */
+            
+            thumbSet.setupNavPanel();
+
 
             for (j in questions) {
                 questions[j].done = false;
@@ -101,13 +104,26 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
 
         // add player to the page
         createPlayer: function (vid) {
+
+            // [@wescott] This is where we read in any additional playerVars sent
+            // to the initThumbnails fn
+            var pVarsInternal = {'autoplay': 0, 'wmode': 'transparent', 'fs': 0, 'controls':1, 'rel':0, 'modestbranding':1, 'showinfo':0}; 
+            //console.log("pVarsInternal is initially...");
+            //console.log(pVarsInternal);
+
+            $.extend(pVarsInternal, pVarsExternal);
+
+            //console.log("pVarsInternal is now...");
+            //console.log(pVarsInternal);
+
             player = new YT.Player('player', {
                 height: vidPlayerHeight,
                 width: vidPlayerWidth,
                 videoId: vid,
                 // wmode: transparent  makes HTML goes on top of Flash
                 // fs: disable full screen
-                playerVars: {'autoplay': 0, 'wmode': 'transparent', 'fs': 0, 'controls':1, 'rel':0, 'modestbranding':1, 'showinfo':0},
+                //playerVars: {'autoplay': 0, 'wmode': 'transparent', 'fs': 0, 'controls':1, 'rel':0, 'modestbranding':1, 'showinfo':0},
+                playerVars: pVarsInternal,
                 events: {
                     'onReady': onPlayerReady,
                     'onStateChange': onPlayerStateChange,
@@ -124,14 +140,9 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
             globalQTime = qTime;
 
             $('#playerdiv').fadeTo('slow', .7);
-            //$('.video-overlay-question').show();
-            //$('.video-overlay-hint').show();
-            //console.log(questions[qTime]["problemDiv"]);
-            $('#' + questions[qTime]["problemDiv"]).show();
-            $('#' + questions[qTime]["problemDiv"]).css('z-index', 100);
             $('#problemarea').css('z-index', 2);
+            $('#problemarea').show()
             $('#answer_area').fadeIn('slow');
-
             //hide index navigation panel
             $("#slideIndex").hide();
 
@@ -149,6 +160,8 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
             qDiv.setAttribute('class','questionDiv');
             qDiv.setAttribute('id','questionPane');
             $('#questionBG').after(qDiv);
+            KhanC2G.makeProblem(questions[qTime].order);
+
 
         },
 
@@ -231,6 +244,7 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
         },
 
         setupNavPanel: function (){
+            //console.log('setupNavPanel')
             var merged = Array();
 
             for (time in slideIndices) {
@@ -288,18 +302,18 @@ var initThumbnails = function (c2gVidId, c2gSlideIndicesObj, c2gQuizIndicesObj) 
         addQuizSlide: function (idxTime) {
             var indexDiv = document.getElementById('slideIndex');
             var tempDiv = document.createElement('div');
-            var greyDiv = document.createElement('div');
+            //var greyDiv = document.createElement('div');
             $(tempDiv).addClass('divInIndex').addClass('quiz-thumb').attr('id','slideIndex'+idxTime+'s');
-            $(greyDiv).addClass('greyOverlay').html("<br/><br/>Quiz");
+            //$(greyDiv).addClass('greyOverlay').html("<br/><br/>Quiz");
             var slideImg = document.createElement('img');
-            slideImg.src = 'q_'+idxTime+'.jpg';
-
-            tempDiv.appendChild(greyDiv);
+            //slideImg.src = 'q_'+idxTime+'.jpg';
+            slideImg.src = '/static/graphics/core/question.png';
+            //tempDiv.appendChild(greyDiv);
             tempDiv.appendChild(slideImg);
 
             tempDiv.onclick=(function (time) {return function(evt) {
-            player.seekTo(time-1);
-            thumbSet.selectSlide(time);
+                                player.seekTo(time-0.5);
+                                thumbSet.selectSlide(time);
             };})(idxTime);
             $('#slideIndex').append(tempDiv);
             return tempDiv;
