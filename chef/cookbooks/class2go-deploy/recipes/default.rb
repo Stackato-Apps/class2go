@@ -12,20 +12,21 @@ git "class2go-sourcecode" do
     destination node['system']['admin_home'] + "/class2go"
     user node['system']['admin_user']
     group node['system']['admin_group']
+    revision node['main']['git_branch']
     action :sync
 end
 
 directory "/opt/class2go" do
     owner node['system']['admin_user']
     group node['system']['admin_group']
-    mode 00755
+    mode 00777
     action :create
 end
 
 directory "/opt/class2go/static" do
     owner node['system']['admin_user']
     group node['system']['admin_group']
-    mode 00755
+    mode 00777
     action :create
 end
 
