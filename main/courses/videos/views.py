@@ -72,11 +72,7 @@ def view(request, course_prefix, course_suffix, slug):
 
 @auth_is_course_admin_view_wrapper
 def edit(request, course_prefix, course_suffix, slug):
-    try:
-        common_page_data = get_common_page_data(request, course_prefix, course_suffix)
-    except:
-        raise Http404
-
+    common_page_data = request.common_page_data
     video = common_page_data['course'].video_set.all().get(slug=slug)
     form = S3UploadForm(course=common_page_data['course'], instance=video)
 
@@ -256,7 +252,7 @@ def get_video_exercises(request):
     except Video.DoesNotExist:
         raise Http404
     
-    videoToExs = VideoToExercise.objects.select_related('exercise', 'video').filter(video=video).order_by('video_time')
+    videoToExs = VideoToExercise.objects.select_related('exercise', 'video').filter(video=video, is_deleted=False).order_by('video_time')
     json_list = {}
     order = 0
     for videoToEx in videoToExs:
@@ -275,7 +271,7 @@ def get_video_exercises(request):
 @auth_view_wrapper
 def load_video_problem_set(request, course_prefix, course_suffix, video_id):
 
-    vex_list = VideoToExercise.objects.select_related('exercise', 'video').filter(video_id=video_id).order_by('video_time')
+    vex_list = VideoToExercise.objects.select_related('exercise', 'video').filter(video_id=video_id, is_deleted=False).order_by('video_time')
 
     file_names = []
     for vex in vex_list:
