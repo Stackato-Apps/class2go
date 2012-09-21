@@ -1,0 +1,35 @@
+name: class2go
+framework: python
+runtime: python27
+env:
+  DJANGO_SETTINGS_MODULE: settings
+
+processes:
+  web: python manage.py runserver $PORT
+
+requirements:
+  pypm:
+    - django
+    - django-celery
+    - mysql-python
+    - pil
+    - south
+#    - django-storages
+#    - boto
+
+services:
+  ${name}-db: mysql
+  ${name}-fs: filesystem 
+
+hooks:
+  post-staging:
+    - python manage.py syncdb --noinput
+    - python manage.py migrate
+    - echo "Run 'stackato run python manage.py createsuperuser' to create an admin user"
+#    - mkdir static
+#    - python manage.py collectstatic
+#    - touch /app/logs/django.log
+
+ignores:
+  - .git
+  - dev.db
